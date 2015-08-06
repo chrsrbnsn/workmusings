@@ -1,0 +1,129 @@
+$Counter = 0
+
+$WorkingDir = "C:\Temp\InfraReadiness"
+
+If(!(Test-Path $WorkingDir))
+{ 
+    New-Item -Path $WorkingDir -ItemType Directory
+    New-Item -Path $WorkingDir\QryLog.log -ItemType File 
+    Copy-Item "C:\Temp\ReadinessSetup\PortQry.exe" $WorkingDir
+    Copy-Item "C:\Temp\ReadinessSetup\endpoints.csv" $WorkingDir
+}
+ 
+$PQry = "$WorkingDir\PortQry.exe"
+
+$PQryEndpoints = Import-Csv "$WorkingDir\endpoints.csv"
+#$PQryEndpoints = Import-Csv "C:\Temp\ReadinessSetup\blah.csv"
+
+While ($Counter -le $PQryEndpoints.Count)
+{
+
+    foreach ($Endpoint in $($PQryEndpoints[$Counter]))
+    {
+           
+        Write-Output "" | Tee-Object -File "$WorkingDir\QryLog.log" -Append
+        if($($Endpoint.descrp)) { Write-Output $Endpoint.descrp | Tee-Object -File "$WorkingDir\QryLog.log" -Append }
+       
+        if($Endpoint.o)
+        {
+            foreach ($oport in $Endpoint.o.Split(','))
+            {
+                foreach ($op in $oport)
+                {
+                    $PQryArgs = @('-n',
+                    "$($Endpoint.n)",
+                    '-o',
+                    "$($op)",
+                    '-p',
+                    "$($Endpoint.p)")
+
+                    Write-Output "Processing $($Endpoint.n) for port $($PQryArgs[-3]), protocol $($PQryArgs[-1])" | Tee-Object -File "$WorkingDir\QryLog.log" -Append
+                    Write-Output ""
+                    &$PQry $PQryArgs | Select-String -Pattern "LISTENING","FILTERED","resolved" -Exclude "returns" | Tee-Object -File "$WorkingDir\QryLog.log" -Append
+                } 
+            }
+        }
+        
+        if($Endpoint.r)
+        {
+            foreach ($rport in $Endpoint.r)
+            {           
+                $PQryArgsR = @('-n',
+                "$($Endpoint.n)",
+                '-r',
+                "$($rport)",
+                '-p',
+                "$($Endpoint.p)")
+
+                 Write-Output "Processing $($Endpoint.n) for port $($PQryArgsR[-3]), protocol $($PQryArgsR[-1])" | Tee-Object -File "$WorkingDir\QryLog.log" -Append
+                 Write-Output ""
+                 &$PQry $PQryArgsR | Select-String -Pattern "LISTENING","FILTERED","resolved" -Exclude "returns" | Tee-Object -File "$WorkingDir\QryLog.log" -Append
+            }
+        }
+    
+        if($Endpoint.e)
+        {
+            foreach ($eport in $Endpoint.e.Split(','))
+            {
+                foreach ($ep in $eport)
+                {
+                    $PQryArgsE = @('-n',
+                    "$($Endpoint.n)",
+                    '-e',
+                    "$($ep)",
+                    '-p',
+                    "$($Endpoint.p)")
+                                        
+                    Write-Output "Processing $($Endpoint.n) for port $($PQryArgsE[-3]), protocol $($PQryArgsE[-1])" | Tee-Object -File "$WorkingDir\QryLog.log" -Append
+                    Write-Output ""
+                    &$PQry $PQryArgsE | Select-String -Pattern "LISTENING","FILTERED","resolved" -Exclude "returns" | Tee-Object -File "$WorkingDir\QryLog.log" -Append
+                } 
+            }
+        }
+
+        if($Endpoint.eudp)
+        {
+            foreach ($eudpport in $Endpoint.eudp.Split(','))
+            {
+                foreach ($eud in $eudport)
+                {
+                    $PQryArgsEUDP = @('-n',
+                    "$($Endpoint.n)",
+                    '-e',
+                    "$($eud)",
+                    '-p',
+                    "UDP")
+                    
+                    Write-Output "Processing $($Endpoint.n) for port $($PQryArgsEUDP[-3]), protocol $($PQryArgsEUDP[-1])" | Tee-Object -File "$WorkingDir\QryLog.log" -Append
+                    Write-Output ""
+                    &$PQry $PQryArgsEUDP | Select-String -Pattern "LISTENING","FILTERED","resolved" -Exclude "returns" | Tee-Object -File "$WorkingDir\QryLog.log" -Append
+                }
+            }
+        }
+
+        if($Endpoint.etcp)
+        {
+            foreach ($etcpport in $Endpoint.etcp.Split(','))
+            {
+                foreach ($etc in $etcpport)
+                {
+                     $PQryArgsETCP = @('-n',
+                    "$($Endpoint.n)",
+                    '-e',
+                    "$($etcpport)",
+                    '-p',
+                    "TCP")
+
+                    Write-Output "Processing $($Endpoint.n) for port $($PQryArgsETCP[-3]), protocol $($PQryArgsETCP[-1])" | Tee-Object -File "$WorkingDir\QryLog.log" -Append
+                    Write-Output ""
+                    &$PQry $PQryArgsETCP | Select-String -Pattern "LISTENING","FILTERED","resolved" -Exclude "returns" | Tee-Object -File "$WorkingDir\QryLog.log" -Append
+                }
+            }
+        }
+    }
+    $Counter++
+}
+
+Write-Output ""
+Write-Output "PortQry Complete...."
+#Remove-Item "$WorkingDir\garbage.txt"
