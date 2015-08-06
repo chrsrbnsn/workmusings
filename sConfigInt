@@ -1,0 +1,177 @@
+<#
+.Synopsis
+   Short description
+.DESCRIPTION
+   Long description
+.EXAMPLE
+   Example of how to use this cmdlet
+.EXAMPLE
+   Another example of how to use this cmdlet
+#>
+function Configure-VServer
+{
+    [CmdletBinding()]
+    [OutputType([int])]
+    Param
+    (
+        # Param1 help description
+        [Parameter(Mandatory=$true,
+                   ValueFromPipelineByPropertyName=$true,
+                   Position=0)]
+        [String[]]
+        $ServerName,
+
+        # Param2 help description
+        [Parameter(Mandatory=$true,
+                   ValueFromPipelineByPropertyName=$true,
+                   Position=1)]
+        [String]
+        $TimeZone
+    )
+
+    Begin
+    {
+        $ConfigDir = "D:\serverconfig"
+        $timestamp = Get-Date
+        $logfile = "$ConfigDir\PSBuildlog.log"
+        $netshargs = @('advfirewall','set','allprofiles','state','off')
+        $netshcmd = "netsh"
+        $WERKey = "HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting"
+        $RDPKey = "HKLM:\System\CurrentControlSet\Control\Terminal Server"
+        $AdminKey = “HKLM:\SOFTWARE\Microsoft\Active Setup\Installed Components\{A509B1A7-37EF-4b3f-8CFC-4F3A74704073}”
+        
+        switch ($TimeZone)
+        {
+            PST {$TimeZone = "Pacific Standard Time"; break}
+            MST {$TimeZone = "Mountain Standard Time"; break}
+            CST {$TimeZone = "Central Standard Time"; break}
+            EST {$TimeZone = "Eastern Standard Time"; break}
+        }
+        
+        $tzoneargs = @('/s',"$TimeZone")
+        $tzonecmd = "tzutil"
+
+    }
+    Process
+    {
+        Start-Transcript -Path $logfile
+        
+        Write-Output "$timestamp Configuring $ServerName...."
+           
+        #Set time zone
+        
+        Write-Output "Setting Timezone to $TimeZone" 
+        
+        & $tzonecmd $tzoneargs
+        
+        <#
+        Add required Windows features NET-Framework-Core,SNMP-Services,Telnet-Client 
+ 
+        #>
+
+        Write-Output "Adding required Windows Features .NET Framewok 3.5.1, SNMP Services & Telnet Client.."
+        
+        Import-Module ServerManager
+
+        Add-WindowsFeature -Name NET-Framework-Core,SNMP-Services,Telnet-Client
+
+        <# 
+            Set automatic update to Disable
+
+            NotificationLevel  :
+            0 = Not configured;
+            1 = Disabled;
+            2 = Notify before download;
+            3 = Notify before installation;
+            4 = Scheduled installation;
+        #>
+
+        Write-Output "Disabling MS AutoUpdate..."
+
+        $WUSettings = (New-Object -com "Microsoft.Update.AutoUpdate").Settings
+        $WUSettings.NotificationLevel=1
+        $WUSettings.save()
+
+        <#
+            Disabling Windows Error Reporting(WER) via registry:
+            HKLM:\SOFTWARE\Microsoft\PCHealth\ErrorReporting
+        #>
+
+        Write-Output "Disable Windows Error Reporting..."
+        
+        If (Test-Path $WERKey )
+        {
+            Set-ItemProperty -Path $WERKey -Name "Disabled" -Value 1
+        }
+        Else
+        {
+            Write-Output "$timestamp WER registry key(s) $WERKey does not exist"
+        }
+
+        <#
+            Enable Remote Desktop via registry:
+            HKLM:\System\CurrentControlSet\Control\Terminal Server
+        #> 
+
+        Write-Output "Enabling Remote Desktop access..."
+        
+        If (Test-Path $RDPKey )
+        {
+            Set-ItemProperty -Path $RDPKey -Name "fDenyTSConnections" -Value 0
+        }
+
+        <#
+            Disable IEESC for Admins
+            "HKLM:\SOFTWARE\Microsoft\Active Setup\Installed Components\{A509B1A7-37EF-4b3f-8CFC-4F3A74704073"
+        #>
+
+        Write-Output "Disabling IEESC for Administrator..."
+        
+        Set-ItemProperty -Path $AdminKey -Name “IsInstalled” -Value 0
+
+        <#
+            Disable Windows Firewall
+        #>
+            
+        Write-Output "Disabling Windows Firewall (All Profiles)..."
+        
+        & $netshcmd $netshargs
+
+        <#
+            Set machine hostname
+        #>
+
+        #Not available in PoSH v.2
+        #Rename-Computer -NewName $hostname
+ 
+        Write-Output "Renaming machine to $ServerName..."
+        
+        $ComputerInfo = Get-WmiObject -Class Win32_ComputerSystem
+        $ComputerInfo.Rename($ServerName)
+ 
+        <# 
+            Install NIC & NIC Teaming HP driver
+        #>
+        
+        Write-Output "Installing NIC & NIC Teaming HP Drivers..."
+        
+        Start-Process "$ConfigDir\cp019400.exe" -ArgumentList '/s' -Wait
+        Start-Process "$ConfigDir\cp021802.exe" -ArgumentList '/s' -Wait
+        
+        Write-Output "Enabling PS-Remoting..."
+        
+        Enable-PSRemoting -Force
+
+    }
+
+    End
+    {   Stop-Transcript
+        Wait-Event -Timeout 15
+        Restart-Computer
+    }
+}
+
+$sName = Read-Host "Enter Server Name: "
+$tzone = Read-Host "Enter PST for (Pacific Standard Time), MST for (Mountain Standard Time), CST for (Central Standard Time) and EST for (Eastern Standard Time): "
+
+Configure-VSSServer -ServerName $sName -TimeZone $tzone
