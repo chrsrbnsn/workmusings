@@ -1,0 +1,196 @@
+$HostName = $env:COMPUTERNAME
+$CurrentUser = "$env:USERDOMAIN\$env:USERNAME"
+
+$NewLogHeader= @"
+
+       ********************************************************************************************            
+       ********************************************************************************************
+       ********************************************************************************************                                                       
+                              Readiness Log create $([DateTime]::Now)          
+                              Hostname: $HostName                         
+                              Login ID: $CurrentUser                              
+       ********************************************************************************************
+       ********************************************************************************************
+       ********************************************************************************************                      
+       
+"@
+
+# identify device role
+if (($HostName -like '*NVR*') -or ($HostName -like '*AMS*'))
+{
+    $deviceRole = 1
+    $LogDir = "E:\S4"
+    if(!(Test-Path -Path $LogDir)) {New-Item -ItemType 'Directory' -Path $LogDir}
+    $LogFile = "$LogDir\$HostName`_Readiness.log"
+    if($Hostname -like '*NVR*')
+    {
+        $deviceBanner = "$HostName is a NVR"
+    }
+    else
+    {
+        $deviceBanner = "$HostName is an AMS"
+    }
+}
+else
+{
+    $deviceRole = 2
+    $LogDir = "C:\Temp\S4 tech"
+    $LogFile = "$LogDir\$HostName`_Readiness.log"
+    $deviceBanner = "$HostName is a workstation"
+}
+
+ 
+if(!(Test-Path $LogFile))
+{
+    if(!(Test-Path $LogDir))
+    { New-Item -Path $LogDir -ItemType Directory }
+
+    New-Item -Path $LogFile -ItemType File
+    Add-Content -Path $LogFile -Value $NewLogHeader
+}
+ 
+Write-Output "" | Out-File -FilePath $LogFile -Append -Encoding utf8
+Write-Output "Verification initiated at [$([DateTime]::Now)] by $CurrentUser " | Out-File -FilePath $LogFile -Append -Encoding utf8
+Write-Output "" | Out-File -FilePath $LogFile -Append -Encoding utf8
+Write-Output "$deviceBanner" | Out-File -FilePath $LogFile -Append -Encoding utf8
+
+ 
+# document the OS
+ 
+$OsInfo = gwmi -Class Win32_OperatingSystem
+$OsProperties = $OsInfo | Select @{N='OS Version';E={$_.Caption}},@{N='OS Architecture';E={$_.osarchitecture}},@{N='Service Pack';E={$_.ServicePackMajorVersion}}
+
+Write-Output "" | Out-File -FilePath $LogFile -Append -Encoding utf8
+Write-Output ":::: OS Information ::::" | Out-File -FilePath $LogFile -Append -Encoding utf8
+ 
+$OsProperties | Format-List | Out-File -FilePath $LogFile -Append -Encoding utf8
+ 
+# validate IP, mask & gateway
+
+$NetAdapterConfig = gwmi Win32_networkadapterconfiguration | where {$_.IPEnabled -eq 'true'} | Select @{L='Adapter Name';E={$_.Description}},@{L='IP Address';E={$_.IPAddress[0]}},@{L='Mask';E={$_.IPSubnet[0]}},@{L='Gateway';E={$_.DefaultIPGateway}},@{L='DNS Servers';E={$_.DNSServerSearchOrder}},@{L='Domain';E={$_.DNSDomain}}
+ 
+Write-Output ":::: Network Information ::::" | Out-File -FilePath $LogFile -Append -Encoding utf8
+
+$NetAdapterConfig | Format-List | Out-File -FilePath $LogFile -Append -Encoding utf8
+ 
+# validate version 4.0 of .NET or higher
+ 
+$DotNetVersion = Get-ItemProperty HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* | Where { $_.DisplayName -like 'Microsoft .NET Framework*'} | Select @{L='Name';E={$_.DisplayName}},@{L='Version';E={$_.DisplayVersion}}
+
+Write-Output ":::: .NET Framework Versions ::::" | Out-File -FilePath $LogFile -Append -Encoding utf8
+ 
+$DotNetVersion | Format-List | Out-File -FilePath $LogFile -Append -Encoding utf8
+
+if (!($deviceRole -eq 1))
+{
+
+    # validate N isn't installed
+ 
+    $InstalledApps = Get-ItemProperty HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\* | Select @{L='Name';E={$_.DisplayName}},@{L='Version';E={$_.DisplayVersion}}
+
+    Write-Output ":::: Installed Software ::::" | Out-File -FilePath $LogFile -Append -Encoding utf8
+
+    $InstalledApps | Format-List | Out-File -FilePath $LogFile -Append -Encoding utf8
+     
+    # validate Nightwatchman service (Nightwatchman functions have been rolled into 1E-NomadBranch?)
+
+    $InstalledServices = Get-Service | Sort Status
+
+    Write-Output ":::: Installed Services ::::" | Out-File -FilePath $LogFile -Append -Encoding utf8
+    $InstalledServices | Out-File -FilePath $LogFile -Append -Encoding utf8
+ 
+    if ($InstalledServices | Where {$_.DisplayName -like 'Cisco NAC*'})
+        {
+            Write-Output ":::: N Agent ::::"| Out-File -FilePath $LogFile -Append -Encoding utf8
+            Write-Output "" | Out-File -FilePath $LogFile -Append -Encoding utf8
+
+            Write-Output "N Agent detected on $HostName"| Out-File -FilePath $LogFile -Append -Encoding utf8
+        }
+    else
+        {
+            Write-Output ":::: N Agent ::::"| Out-File -FilePath $LogFile -Append -Encoding utf8
+            Write-Output "" | Out-File -FilePath $LogFile -Append -Encoding utf8
+        
+            Write-Output "NO N Agent detected on $HostName"| Out-File -FilePath $LogFile -Append -Encoding utf8
+        }
+}
+else
+{
+    # disk layout
+    $DiskDrives = gwmi Cim_LogicalDisk
+
+    Write-Output ":::: Disk Layout ::::" | Out-File -FilePath $LogFile -Append -Encoding utf8
+
+    $DiskDrives | Select @{L='Drive';E={$_.DeviceID}},@{L='Name';E={$_.VolumeName}},@{L='Size (GB)';E={[math]::truncate($_.Size/1GB)}},@{L='Free Space (GB)';E={[math]::truncate($_.FreeSpace/1GB)}} | Out-File -FilePath $LogFile -Append -Encoding utf8
+
+    # persistant route information ONLY if server is NVR
+    if($deviceBanner -like "NVR")
+    {
+        $RouteInfo = &route.exe 'print'
+
+        Write-Output ":::: Route Information ::::" | Out-File -FilePath $LogFile -Append -Encoding utf8
+
+        $RouteInfo | Out-File -FilePath $LogFile -Append -Encoding utf8
+    }
+    # checking server time
+    $serverTimeArgs = @('time','\\localhost')
+    $serverTime = &net $serverTimeArgs
+
+    Write-Output "" | Out-File -FilePath $LogFile -Append -Encoding utf8
+    Write-Output ":::: Server Time Verification ::::" | Out-File -FilePath $LogFile -Append -Encoding utf8
+    Write-Output "" | Out-File -FilePath $LogFile -Append -Encoding utf8
+
+
+    $serverTime | Out-File -FilePath $LogFile -Append -Encoding utf8
+
+    # checking for telnet client
+    Write-Output "" | Out-File -FilePath $LogFile -Append -Encoding utf8
+    Write-Output ":::: Check for Telnet Client ::::" | Out-File -FilePath $LogFile -Append -Encoding utf8
+    Write-Output "" | Out-File -FilePath $LogFile -Append -Encoding utf8
+
+
+    Import-Module ServerManager
+
+    if ((Get-WindowsFeature -Name 'telnet-client').Installed) 
+    {
+        Write-Output "Telnet client is installed" | Out-File -FilePath $LogFile -Append -Encoding utf8
+    }
+    else
+    {
+        Write-Output "Telnet client is NOT installed" | Out-File -FilePath $LogFile -Append -Encoding utf8
+    }
+
+    Get-WindowsFeature | ? { $_.Name -eq 'telnet-client'} | Out-File -FilePath $LogFile -Append -Encoding utf8
+    }
+
+# verify logon server
+ 
+$DCLogon = $env:LOGONSERVER
+
+Write-Output "" | Out-File -FilePath $LogFile -Append -Encoding utf8
+Write-Output ":::: Logon Server ::::" | Out-File -FilePath $LogFile -Append -Encoding utf8
+Write-Output "" | Out-File -FilePath $LogFile -Append -Encoding utf8
+
+Write-Output "Current logon server: $DCLogon" | Out-File -FilePath $LogFile -Append -Encoding utf8
+
+# license info
+$LicInfoArgs = @('C:\Windows\System32\slmgr.vbs','/dli')
+$LicInfo = &cscript.exe $LicInfoArgs
+
+Write-Output "" | Out-File -FilePath $LogFile -Append -Encoding utf8
+Write-Output ":::: License Information ::::" | Out-File -FilePath $LogFile -Append -Encoding utf8
+Write-Output "" | Out-File -FilePath $LogFile -Append -Encoding utf8
+
+$LicInfo | Out-File -FilePath $LogFile -Append -Encoding utf8
+
+ 
+<#  
+    
+    place holder for portqry scripts/module integration
+     
+#>
+
+Write-Output "" | Out-File -FilePath $LogFile -Append -Encoding utf8
+Write-Output "" | Out-File -FilePath $LogFile -Append -Encoding utf8
+
+Write-Output "Verification completed at [$([DateTime]::Now)]" | Out-File -FilePath $LogFile -Append -Encoding utf8
