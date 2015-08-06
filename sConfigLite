@@ -1,0 +1,24 @@
+$servers = Get-Content -Path "C:\Temp\servers.txt"
+
+
+[ScriptBlock] $configscript = {
+    $ConfigDir = "D:\SInstall"
+    $commservList = Get-Content "$ConfigDir\c_hosts.txt"
+    $hostFile = "$env:windir\System32\drivers\etc\hosts"
+
+    $oPageFile = Get-WmiObject -Query "Select * from Win32_ComputerSystem" -EnableAllPrivileges
+
+    $oPageFile.AutomaticManagedPagefile=$false
+    $oPageFile.Put()
+
+    $oPFileSetting = Get-WmiObject -Query "Select * from Win32_PageFileSetting Where Name='c:\\pagefile.sys'"
+    $oPFileSetting.Delete()
+
+    Add-Content -Encoding UTF8 -Path $hostFile -Value $commservList 
+    }
+
+$servers | % {if(!(Test-Path \\$_\d`$\SInstall)){New-Item -ItemType Directory -Path \\$_\d`$\SInstall }}
+$servers | % { Copy-Item "D:\SInstall\c_hosts.txt" "\\$_\\d`$\SInstall" }
+$sessions = $servers | New-PSSession
+Invoke-Command -Session $sessions -ScriptBlock $configscript
+$sessions | Remove-PSSession
