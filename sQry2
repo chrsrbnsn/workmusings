@@ -1,0 +1,160 @@
+$ScriptRoot = Split-Path -Parent -Path $MyInvocation.MyCommand.Definition
+$hTypes = @('AMS','NVR','WKS','DEC')
+$HostEndpoints = @()
+$index = 0
+
+#VSS Variables
+$AMS = @('')
+$NVR = @('')
+$WKS = $env:COMPUTERNAME
+$DEC = $env:COMPUTERNAME
+
+
+     <#
+    .Synopsis
+       Short description
+    .DESCRIPTION
+       Long description
+    .EXAMPLE
+       Example of how to use this cmdlet
+    .EXAMPLE
+       Another example of how to use this cmdlet
+    #>
+    function Run-pQry
+    {
+        [CmdletBinding()]
+        [OutputType([int])]
+        Param
+        (
+            # Param1 help description
+            [Parameter(Mandatory=$true,
+                       Position=0)]
+            [ValidateNotNullOrEmpty()]
+            [string[]]$NameToQuery,
+
+            # Param2 help description
+            [Parameter(Mandatory=$true,
+                       Position=1)]
+            [ValidateSet("TCP","UDP")]        
+            [string]
+            $Protocol,
+
+            [Parameter(Mandatory=$true,
+                       Position=2)]
+            $Port,
+
+            [Parameter(Mandatory=$true,
+                       Position=3)]
+            $Description
+        )
+         
+            foreach($Query in $NameToQuery)
+            {
+                if($Port -like '*-*') { $newPort = Invoke-Expression $(($Port).Replace('-','..')); $epSwitch = '-e'  } Else { $newPort = $Port; $epSwitch = '-o' }
+                
+                $pQryArg = @('-n',$Query,'-p',$Protocol,$epSwitch,$newPort)
+
+                Write-Output "Running $Description....for $Query"
+
+                &$pQry $pQryArg | Select-String -Pattern "LISTENING","FILTERED","resolved" -Exclude "returns"
+            }
+             
+
+    }
+
+
+#identify host
+
+Switch -Wildcard ($env:COMPUTERNAME.ToLower())
+    {
+        "*ams*" {$HostType="AMS"; $Script:WorkingDir = "E:\S4"}
+        "*nvr*" {$HostType="NVR"; $Script:WorkingDir = "E:\S4"}
+        "*vssw*"{$HostType="WKs"; $Script:WorkingDir = "C:\Temp\S4"}
+        "*vssd*"{$HostType="DEC"; $Script:WorkingDir = "C:\Temp\S4"}
+        default {
+            do {
+                $defaultType = Read-Host 'Which Host Type (AMS,NVR,WKS,DEC)?'
+                }
+                while($hTypes -notcontains $defaultType)
+                $HostType= $defaultType
+                if($defaultType -eq "AMS" -or $defaultType -eq "NVR") {$WorkingDir = "E:\S4"} Else {$WorkingDir = "C:\Temp\S4"}
+            }
+    }
+
+
+if (!(Test-Path $WorkingDir))
+{
+    Write-Output "$WorkingDir does not exist...creating."
+    New-Item -Path $WorkingDir -ItemType 'Directory'
+    Copy-Item "$ScriptRoot\NICE_endpoints.csv" -Destination $WorkingDir
+}
+
+#verify prtqry exists
+
+$Script:pQry = "$WorkingDir\PortQry.exe"
+
+if(Test-Path -Path "$pQry")
+{    
+    Write-Output "PortQry.exe was found."
+}
+else
+{
+    Write-Output "Missing PortQry executable!"
+    Write-Output "Copying file...."
+    Copy-Item "$ScriptRoot\portqry.exe" -Destination $WorkingDir
+}
+
+Write-Output "Host is a $HostType."
+
+#import endopoints
+
+$csvEndpoint = Import-Csv -Path "$WorkingDir\NICE_endpoints.csv"
+
+#prepare host type flows
+
+foreach ( $endpoint in $csvEndpoint)
+{
+   if($endpoint.source -eq $HostType)
+   {
+        $HostEndpoints += $endpoint
+   }
+}
+
+Write-Output "Show Endpoints $HostEndpoints"
+
+
+#run prtqry
+
+Write-Output "Starting query......."
+$destination = @()
+
+foreach ( $flow in $HostEndpoints)
+{
+    Switch ($flow.Destination)
+    {
+        "AMS" { $destination = $AMS; try { Run-pQry $destination $flow.Protocol $flow.Port $flow.Description } catch { Write-Output "An Error Occured."}}
+        "NVR" { $destination = $NVR; try { Run-pQry $destination $flow.Protocol $flow.Port $flow.Description } catch { Write-Output "An Error Occured."}}
+        "WKS" { $destination = $WKS; try { Run-pQry $destination $flow.Protocol $flow.Port $flow.Description } catch { Write-Output "An Error Occured."}}
+        "DEC" { $destination = $DEC; try { Run-pQry $destination $flow.Protocol $flow.Port $flow.Description } catch { Write-Output "An Error Occured."}}  
+    }
+    
+<#
+    do
+    {
+    
+        if($flow.Port -like '*-*') { $port = Invoke-Expression $(($flow.Port).Replace('-','..')); $epSwitch = '-e'  } Else { $port = $flow.Port; $epSwitch = '-o' }
+        if(!($destination[$index] -eq $null)) { $device = $destination[$index] }
+        $pQryArg = @('-n',"$device",'-p',"$($flow.Protocol)","$epSwitch", "$port")
+
+        Write-Output "Running $($flow.Description)....from $($flow.Source) to $($flow.Destination)"
+
+        &$pQry $pQryArg #| Select-String -Pattern "LISTENING","FILTERED","resolved" -Exclude "returns"
+        
+        $index++ 
+    } 
+    while($index -lt $destination.Count)
+ #>
+
+}
+
+Write-Output "Query Complete..."
