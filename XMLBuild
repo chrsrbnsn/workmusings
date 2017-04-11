@@ -1,0 +1,84 @@
+ <#
+{0} - Controller Name
+{1} - Partition Key
+{2} - ComBoard number, ComBoard SlotIndex
+{3} - ACMBoard number, ACMBoard SlotIndex
+{4} - Input Name
+{5} - Input SlotIndex
+#>
+
+$script:iStarRoot = "CrossFire"
+$script:iStarInput = "SoftwareHouse.NextGen.Common.SecurityObjects.iStarInput"
+$script:iStarController = "SoftwareHouse.NextGen.Common.SecurityObjects.iStarController"
+$script:iStarComBoard = "SoftwareHouse.NextGen.Common.SecurityObjects.iStarComBoard"
+$script:iStarInputBoard = "SoftwareHouse.NextGen.Common.SecurityObjects.iStarInputBoard"
+
+　
+function Create-XMLNode
+{
+    para($ParentNode,$NodeToCreate,$oXML)
+
+    $xmlfilepath = ""
+    [xml]$iStarTemplate = Get-Content $xmlfilepath
+        
+    Switch($ParentNode)
+    {
+     $iStarRoot     { $pNode = $iStarTemplate.$iStarRoot; break }   
+     $iStarController { $pNode = $iStarTemplate.$iStarRoot.$iStarController; break }
+     $iStarComBoard { $pNode = $iStarTemplate.$iStarRoot.$iStarController.$iStarComBoard; break }
+     $iStarInputBoard {$pNode = $iStarTemplate.$iStarRoot.$iStarController.$iStarComBoard.$iStarInputBoard ; break}
+    }
+
+    $CloneNode = $pNode.SelectSingleNode($NodeToCreate)
+    $NewNode = $iStarTemplate.CreateElement($NodeToCreate)
+    $NewNode.InnerXML = $CloneNode.InnerXML
+    $NewNode.SetAttribute('ImportMode','Default')
+
+    #$oXML.AppendChild($NewNode)
+    return $oXML
+}
+
+　
+#XML config file
+$config =  
+
+#XML output
+$filePath = ""
+
+#CSV input
+$dataset = Import-Csv ""
+
+#create copy of each Node
+
+　
+　
+foreach($data in $dataset)
+{
+    
+    [xml$x=(&$config)
+    if($x.CrossFire.ChildNodes.Name -eq '{0}')
+    {
+        [xml]$x=(&$config) -f $data.Controller,$data.PartitionKey,$data.Address,$data.ACMnum,$data.Name,$data.SlotIndex
+    }
+    else
+    {    
+        if($data.Controller)
+        {
+                [xml]$x=(&$config) -f $data.Controller,$data.PartitionKey,$data.Address,$data.ACMnum,$data.Name,$data.SlotIndex
+            }
+        }
+        elseif($data.ACMnum)
+        {
+            [xml]$x=(&$config) -f $data.Address,$data.ACMnum,$data.Name,$data.SlotIndex
+        }
+        elseif($data.Address)
+        {
+            [xml]$x=(&$config) -f $data.Address,$data.Name,$data.SlotIndex
+        }
+        else
+        {
+            [xml]$x=(&$config) -f $data.Name,$data.SlotIndex
+        }
+    }
+}
+$x.Save($filePath) 
