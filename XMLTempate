@@ -1,0 +1,39 @@
+ <?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<CrossFire culture-info="en-US" platform-version="2.40.8" product-version="2.40.8">
+  <SoftwareHouse.NextGen.Common.SecurityObjects.iStarController ImportMode="Default">
+    <Name>{0}</Name>
+    <ControllerType>iStarUltraEncrypted</ControllerType>
+    <PartitionKey>{1}</PartitionKey>
+    <SoftwareHouse.NextGen.Common.SecurityObjects.iStarComBoard ImportMode="Default">
+      <Name>iSTAR Device Port8-iSTAR Ultra ACM{3} -{0}</Name>
+      <BoardType>ISTARUltraACMSerialCOMboard</BoardType>
+      <ParentClassType>SoftwareHouse.NextGen.Common.SecurityObjects.iStarUltraACMBoard</ParentClassType>
+      <Protocol>RM</Protocol>
+      <SlotIndex>8</SlotIndex>
+      <SoftwareHouse.NextGen.Common.SecurityObjects.iStarInputBoard ImportMode="Default">
+        <Name>iSTAR Input Board{2}-iSTAR Device Port8-iSTAR Ultra ACM{3} -{0}</Name>
+        <BoardType>I8</BoardType>
+        <ParentClassType>SoftwareHouse.NextGen.Common.SecurityObjects.iStarComBoard</ParentClassType>
+        <SlotIndex>{2}</SlotIndex>
+        <SoftwareHouse.NextGen.Common.SecurityObjects.iStarInput ImportMode="Default">
+          <Name>{4}</Name>
+          <ActivateOnSupervision>False</ActivateOnSupervision>
+          <ActiveStatus>Inactive</ActiveStatus>
+          <Annunciate>False</Annunciate>
+          <ArmedByDefault>False</ArmedByDefault>
+          <BoardClassType>SoftwareHouse.NextGen.Common.SecurityObjects.iStarInputBoard</BoardClassType>
+          <ControllerClassType>SoftwareHouse.NextGen.Common.SecurityObjects.iStarController</ControllerClassType>
+          <Enabled>True</Enabled>
+          <InputType>General</InputType>
+          <NormalMode>Open</NormalMode>
+          <ParentClassType>SoftwareHouse.NextGen.Common.SecurityObjects.iStarInputBoard</ParentClassType>
+          <ReverseSenseOfInput>False</ReverseSenseOfInput>
+          <SendToJournal>True</SendToJournal>
+          <SendToMonitorStation>True</SendToMonitorStation>
+          <SlotIndex>{5}</SlotIndex>
+          <Supervised>True</Supervised>
+        </SoftwareHouse.NextGen.Common.SecurityObjects.iStarInput>
+      </SoftwareHouse.NextGen.Common.SecurityObjects.iStarInputBoard>
+    </SoftwareHouse.NextGen.Common.SecurityObjects.iStarComBoard>
+  </SoftwareHouse.NextGen.Common.SecurityObjects.iStarController>
+</CrossFire> 
